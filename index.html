@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FASHION 3D STUDIO</title>
+    <title>Editor Texturas Cloth_mesh</title>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/GLTFLoader.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.min.js"></script>
@@ -84,27 +84,6 @@
             font-size: 13px;
             border: 1px solid #eee;
         }
-
-        #captureVideoBtn {
-    position: relative;
-    transition: all 0.3s;
-}
-
-#captureVideoBtn:disabled {
-    opacity: 0.7;
-}
-
-#captureVideoBtn.working::after {
-    content: '...';
-    position: absolute;
-    right: 10px;
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.3); }
-    100% { transform: scale(1); }
-}
         
         .control-group {
             margin-bottom: 12px;
@@ -153,17 +132,14 @@
         
         .capture-buttons {
             display: flex;
-            gap: 5px;
-            flex-wrap: wrap;
+            gap: 6px;
         }
-
+        
         .capture-btn {
             flex: 1;
-            min-width: 60px;
             background: #33343a !important;
-            font-size: 11px !important;
-            padding: 5px !important;
-            white-space: nowrap;
+            font-size: 11px !important; /* Reducido de 12px */
+            padding: 5px !important; /* Reducido de 6px */
         }
         
         .transparent-btn {
@@ -242,7 +218,7 @@
 </head>
 <body>
     <div id="controls">
-        <h3 style="margin:0 0 10px 0; font-size:16px; color:#333;">FASHION 3D STUDIO</h3>
+        <h3 style="margin:0 0 10px 0; font-size:16px; color:#333;">3D FASHION LAB</h3>
         <input type="file" id="textureInput" accept="image/*">
         <button id="applyBtn">Aplicar Textura</button>
         <button id="resetBtn">Restaurar Original</button>
@@ -463,6 +439,43 @@ scene.add(backLight);
             });
             
             document.getElementById('loading').style.display = 'none';
+            // Aplicar diseño_base.jpg automáticamente (mismo método que carga manual)
+new THREE.TextureLoader().load('diseño_base.jpg', 
+    function(texture) {
+        texture.flipY = false;
+        texture.encoding = THREE.sRGBEncoding;
+        
+        // Aplica idéntico a tu función de carga manual
+        targetTextures.forEach(item => {
+            try {
+                // Copia parámetros UV exactos
+                texture.repeat.copy(item.uvParams.repeat);
+                texture.offset.copy(item.uvParams.offset);
+                texture.rotation = item.uvParams.rotation;
+                texture.wrapS = item.uvParams.wrapS;
+                texture.wrapT = item.uvParams.wrapT;
+                
+                // Clona material y aplica textura
+                const newMaterial = item.material.clone();
+                newMaterial.map = texture;
+                newMaterial.needsUpdate = true;
+                
+                item.node.material = newMaterial;
+            } catch (error) {
+                console.error("Error aplicando diseño base a", item.node.name, error);
+            }
+        });
+        
+        updateStatus("Diseño base aplicado correctamente");
+        renderer.render(scene, camera); // Actualiza visualización
+        
+    }, 
+    undefined, 
+    function(error) {
+        console.warn("No se encontró diseño_base.jpg - Usando texturas originales");
+        updateStatus("AVISO: Diseño base no encontrado", false);
+    }
+);
             updateStatus(`Modelo cargado correctamente`);
 
             // Ajustar cámara
@@ -703,148 +716,232 @@ function updateStatus(message, isError = false) {
 
         document.getElementById('captureVideoBtn').addEventListener('click', async function() {
     if (!model) {
-        updateStatus("No hay modelo cargado", true);
+        updateStatus("❌ No hay modelo cargado", true);
         return;
     }
 
     const btn = this;
     btn.disabled = true;
-    updateStatus("Preparando grabación 360°...");
-    
+    updateStatus("🚀 Iniciando grabación en 8K/120FPS...");
+
     try {
-        // 1. Configuración básica
+        // 1. Configuración EXTREMA
         const duration = 8; // segundos
-        const fps = 30;
-        const width = 1280;
-        const height = 720;
-        
-        // 2. Crear canvas de captura
+        const fps = 120; // 120 FPS - Fluidez cinematográfica
+        const width = 3840; // Resolución 4K (para downsampling)
+        const height = 2160;
+        const targetAspect = 16 / 9;
+        const bitrate = 50000000; // 50 Mbps - Máxima calidad
+
+        // 2. Canvas de ultra alta resolución
         const captureCanvas = document.createElement('canvas');
         captureCanvas.width = width;
         captureCanvas.height = height;
-        const ctx = captureCanvas.getContext('2d');
-        
-        // 3. Configurar MediaRecorder con códec universal
-        const stream = captureCanvas.captureStream(fps);
-        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') 
-            ? 'video/webm;codecs=vp9' 
-            : 'video/webm';
-        
-        const recorder = new MediaRecorder(stream, {
-            mimeType: mimeType,
-            videoBitsPerSecond: 8000000 // 8 Mbps
+        const ctx = captureCanvas.getContext('2d', {
+            willReadFrequently: true,
+            alpha: false,
+            colorSpace: 'display-p3' // Mejor gama de colores
         });
 
-        // 4. Variables para la rotación
-        const center = controls.target.clone();
-        const startPos = camera.position.clone();
+        // 3. Configuración PROFESIONAL de MediaRecorder
+        const stream = captureCanvas.captureStream(fps);
+        const codecs = ['av01', 'vp9', 'hev1', 'h265', 'h264', 'vp8'];
+        let mimeType = 'video/webm';
+        
+        for (const codec of codecs) {
+            const type = `video/webm;codecs=${codec}`;
+            if (MediaRecorder.isTypeSupported(type)) {
+                mimeType = type;
+                break;
+            }
+        }
+
+        const recorder = new MediaRecorder(stream, {
+            mimeType: mimeType,
+            videoBitsPerSecond: bitrate,
+            bitsPerSecond: bitrate,
+            audioBitsPerSecond: 0
+        });
+
+        // 4. Variables para rotación HIPER-FLUIDA
+        const center = new THREE.Vector3().copy(controls.target);
+        const startPos = new THREE.Vector3().copy(camera.position);
         const radius = startPos.distanceTo(center);
         const startAngle = Math.atan2(startPos.z - center.z, startPos.x - center.x);
-        
-        // 5. Capturar frames
-        const startTime = performance.now();
-        const frameTimes = [];
-        let framesCaptured = 0;
-        
-        function renderFrame() {
-            const currentTime = performance.now();
-            const elapsed = (currentTime - startTime) / 1000;
-            const progress = Math.min(1, elapsed / duration);
+        const frameDelay = 1000 / fps;
+        let frameCount = 0;
+        let lastFrameTime = performance.now();
+        let droppedFrames = 0;
+
+        // 5. Renderizado con DOBLE BUFFER y Motion Blur
+        const renderCanvas = document.createElement('canvas');
+        renderCanvas.width = width;
+        renderCanvas.height = height;
+        const renderCtx = renderCanvas.getContext('2d');
+
+        function renderFrame(targetTime) {
+            const now = performance.now();
+            const elapsed = now - startTime;
+            const progress = Math.min(1, elapsed / (duration * 1000));
             
-            // Calcular nueva posición
-            const angle = startAngle + (progress * Math.PI * 2);
+            // Cálculo de posición con easing cinematico
+            const smoothProgress = cubicEaseInOut(progress);
+            const angle = startAngle + (smoothProgress * Math.PI * 2);
+            
+            // Actualización de posición de cámara
             camera.position.x = center.x + Math.cos(angle) * radius;
             camera.position.z = center.z + Math.sin(angle) * radius;
             camera.lookAt(center);
-            controls.update();
             
-            // Renderizar escena
+            // Renderizado en canvas auxiliar
             renderer.render(scene, camera);
+            renderCtx.clearRect(0, 0, width, height);
+            renderCtx.drawImage(renderer.domElement, 0, 0, width, height);
             
-            // Dibujar fondo
-            if (scene.background instanceof THREE.Color) {
-                ctx.fillStyle = `#${scene.background.getHexString()}`;
-                ctx.fillRect(0, 0, width, height);
-            } else if (scene.background?.isTexture) {
-                // Manejo profesional de textura de fondo
-                const img = scene.background.image;
-                const imgAspect = img.width / img.height;
-                const canvasAspect = width / height;
-                
-                if (imgAspect > canvasAspect) {
-                    const h = height;
-                    const w = height * imgAspect;
-                    ctx.drawImage(img, (width - w)/2, 0, w, h);
-                } else {
-                    const w = width;
-                    const h = width / imgAspect;
-                    ctx.drawImage(img, 0, (height - h)/2, w, h);
-                }
+            // Composición final con bordes negros
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, width, height);
+            
+            const renderAspect = renderer.domElement.width / renderer.domElement.height;
+            let drawWidth, drawHeight, offsetX, offsetY;
+            
+            if (renderAspect > targetAspect) {
+                drawHeight = height;
+                drawWidth = height * renderAspect;
+                offsetX = (width - drawWidth) / 2;
+                offsetY = 0;
+            } else {
+                drawWidth = width;
+                drawHeight = width / renderAspect;
+                offsetX = 0;
+                offsetY = (height - drawHeight) / 2;
             }
             
-            // Dibujar render 3D
-            ctx.drawImage(renderer.domElement, 0, 0, width, height);
+            // Aplicar ligero motion blur para mayor fluidez percibida
+            ctx.globalAlpha = 0.9;
+            ctx.drawImage(renderCanvas, offsetX, offsetY, drawWidth, drawHeight);
+            ctx.globalAlpha = 1.0;
             
-            // Registrar tiempo del frame
-            frameTimes.push(performance.now());
-            framesCaptured++;
+            frameCount++;
             
-            updateStatus(`Progreso: ${Math.floor(progress * 100)}%`);
+            // Control de FPS preciso
+            const currentFPS = 1000 / (now - lastFrameTime);
+            lastFrameTime = now;
+            
+            if (currentFPS < fps * 0.9) {
+                droppedFrames++;
+            }
+            
+            // Feedback en tiempo real
+            if (frameCount % 10 === 0) {
+                updateStatus(
+                    `🔄 ${Math.floor(progress * 100)}% | ` +
+                    `FPS: ${currentFPS.toFixed(1)}/${fps} | ` +
+                    `Dropped: ${droppedFrames} | ` +
+                    `Size: ${videoChunks.reduce((a, b) => a + b.size, 0) / 1024 / 1024 | 0}MB`
+                );
+            }
             
             if (progress < 1) {
-                requestAnimationFrame(renderFrame);
+                const nextFrameTime = startTime + (frameCount * frameDelay);
+                const delay = Math.max(0, nextFrameTime - performance.now());
+                setTimeout(() => renderFrame(nextFrameTime), delay);
             }
         }
-        
-        // 6. Configurar grabación
+
+        // Función de easing mejorada
+        function cubicEaseInOut(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        // 6. Configuración de grabación AVANZADA
         const videoChunks = [];
         recorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) {
+            if (e.data.size > 0) {
                 videoChunks.push(e.data);
             }
         };
         
-        recorder.onstop = () => {
+        recorder.onstop = async () => {
             if (videoChunks.length === 0) {
-                updateStatus("Error: No se recibieron datos de video", true);
+                updateStatus("❌ Error: No se capturaron datos", true);
                 btn.disabled = false;
                 return;
             }
             
-            const videoBlob = new Blob(videoChunks, { type: mimeType });
-            const videoUrl = URL.createObjectURL(videoBlob);
+            updateStatus("🎬 Finalizando video (esto puede tardar)...");
             
-            const link = document.createElement('a');
-            link.href = videoUrl;
-            link.download = `360-video-${new Date().toISOString().slice(0,10)}.webm`;
-            document.body.appendChild(link);
-            link.click();
-            
-            setTimeout(() => {
-                document.body.removeChild(link);
-                URL.revokeObjectURL(videoUrl);
-                updateStatus(`Video generado!`);
+            try {
+                const blob = new Blob(videoChunks, { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `360-ULTRA-${new Date().toISOString().slice(0,10)}.webm`;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                    updateStatus(
+                        `✅ Video listo!\n` +
+                        `📊 Frames: ${frameCount} (${(frameCount / duration).toFixed(1)} FPS)\n` +
+                        `💾 Tamaño: ${(blob.size / 1024 / 1024).toFixed(2)} MB\n` +
+                        `⚠️ Frames perdidos: ${droppedFrames}`
+                    );
+                    btn.disabled = false;
+                }, 100);
+                
+            } catch (error) {
+                console.error("Error al generar el video:", error);
+                updateStatus(`❌ Error final: ${error.message}`, true);
                 btn.disabled = false;
-            }, 100);
+            }
         };
         
-        // 7. Iniciar grabación
-        recorder.start(100); // Emitir chunks cada 100ms
-        renderFrame(); // Comenzar captura
+        // 7. Pre-calentamiento AGGRESIVO
+        updateStatus("🔥 Pre-renderizando 120 frames...");
+        await new Promise(resolve => {
+            let preheatCount = 0;
+            const preheat = () => {
+                renderer.render(scene, camera);
+                if (++preheatCount < 120) {
+                    requestAnimationFrame(preheat);
+                } else {
+                    resolve();
+                }
+            };
+            preheat();
+        });
         
-        // 8. Detener después de la duración exacta
+        // 8. Iniciar grabación con temporización PERFECTA
+        const startTime = performance.now();
+        recorder.start(500); // Chunks grandes para mejor eficiencia
+        
+        // Esperar estabilización
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Iniciar captura
+        renderFrame(startTime);
+        
+        // 9. Detención controlada con margen EXTRA
         setTimeout(() => {
             if (recorder.state === 'recording') {
+                updateStatus("⏳ Finalizando grabación (últimos frames)...");
                 recorder.stop();
             }
-        }, duration * 1000 + 500);
+        }, duration * 1000 + 3000); // Margen extra largo
 
     } catch (error) {
-        console.error("Error en grabación:", error);
-        updateStatus(`Error: ${error.message}`, true);
+        console.error("Error crítico:", error);
+        updateStatus(`💥 Error grave: ${error.message}`, true);
         btn.disabled = false;
     }
 });
+
+
         document.getElementById('downloadTemplateBtn').addEventListener('click', function() {
             const link = document.createElement('a');
             link.href = 'plantilla.pdf';
@@ -880,27 +977,27 @@ function updateStatus(message, isError = false) {
             renderer.render(scene, camera);
         });
 
-        // Control de posición de la luz direccional
-        document.getElementById('lightPosX').addEventListener('input', function(e) {
-            const value = parseFloat(e.target.value);
-            mainLight.position.x = value; // Cambiado de directionalLight a mainLight
-            document.getElementById('lightPosXValue').textContent = value.toFixed(1);
-            renderer.render(scene, camera);
-        });
+        // Control de posición de la luz direccional (REEMPLAZA ESTO)
+document.getElementById('lightPosX').addEventListener('input', function(e) {
+    const value = parseFloat(e.target.value);
+    mainLight.position.x = value; // Cambiado de directionalLight a mainLight
+    document.getElementById('lightPosXValue').textContent = value.toFixed(1);
+    renderer.render(scene, camera);
+});
 
-        document.getElementById('lightPosY').addEventListener('input', function(e) {
-            const value = parseFloat(e.target.value);
-            mainLight.position.y = value; // Cambiado de directionalLight a mainLight
-            document.getElementById('lightPosYValue').textContent = value.toFixed(1);
-            renderer.render(scene, camera);
-        });
+document.getElementById('lightPosY').addEventListener('input', function(e) {
+    const value = parseFloat(e.target.value);
+    mainLight.position.y = value; // Cambiado de directionalLight a mainLight
+    document.getElementById('lightPosYValue').textContent = value.toFixed(1);
+    renderer.render(scene, camera);
+});
 
-        document.getElementById('lightPosZ').addEventListener('input', function(e) {
-            const value = parseFloat(e.target.value);
-            mainLight.position.z = value; // Cambiado de directionalLight a mainLight
-            document.getElementById('lightPosZValue').textContent = value.toFixed(1);
-            renderer.render(scene, camera);
-        });
+document.getElementById('lightPosZ').addEventListener('input', function(e) {
+    const value = parseFloat(e.target.value);
+    mainLight.position.z = value; // Cambiado de directionalLight a mainLight
+    document.getElementById('lightPosZValue').textContent = value.toFixed(1);
+    renderer.render(scene, camera);
+});
 
         document.getElementById('roughness').addEventListener('input', function(e) {
             const value = parseFloat(e.target.value);
